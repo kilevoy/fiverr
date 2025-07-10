@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Дюше от Дюши с Любовью!</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <div class="header__content">
+                <div class="header__main header__main--shifted">
+                    <h1>Дюше от Дюши с Любовью! 💕</h1>
+                    <p>Создавайте оптимизированные Pinterest пины из Fiverr URL</p>
+                </div>
+                <button class="theme-toggle" id="theme-toggle" title="Переключить тему">
+                    <span class="theme-toggle__icon">🌙</span>
+                </button>
+            </div>
+        </header>
+
+        <nav class="nav">
+            <button class="nav__item nav__item--active" data-section="single">Одиночная генерация</button>
+            <button class="nav__item" data-section="batch">Пакетная обработка</button>
+            <button class="nav__item" data-section="results">Результаты</button>
+            <button class="nav__item" data-section="settings">Настройки</button>
+        </nav>
+
+        <main class="main">
+            <!-- Настройки -->
+            <section class="section" id="settings">
+                <div class="card">
+                    <div class="card__header">
+                        <h2>Настройки API</h2>
+                        <p>Введите ваш Claude API ключ для генерации контента</p>
+                    </div>
+                    <div class="card__body">
+                        <div class="form-group">
+                            <label for="api-key" class="form-label">Claude API ключ</label>
+                            <input type="password" id="api-key" class="form-control" placeholder="sk-ant-api03-...">
+                            <div class="form-hint">Ваш API ключ сохраняется в браузере и автоматически загружается при следующем посещении</div>
+                        </div>
+                        <div class="form-group">
+                            <label for="affiliate-id" class="form-label">Affiliate ID</label>
+                            <input type="text" id="affiliate-id" class="form-control" value="1033511">
+                        </div>
+                        <div class="form-actions">
+                            <button class="btn btn--primary" id="save-settings">Сохранить настройки</button>
+                            <button class="btn btn--secondary" id="test-api">Тестировать API</button>
+                            <button class="btn btn--outline" id="clear-api-key">Очистить API ключ</button>
+                        </div>
+                        <div class="status-message" id="settings-status"></div>
+                        
+                        <!-- CORS Troubleshooting Section -->
+                        <div class="card" style="margin-top: 24px; border: 2px solid #e74c3c;">
+                            <div class="card__header" style="background: #fdf2f2;">
+                                <h3 style="color: #e74c3c; margin: 0;">🚨 Проблемы с сетью?</h3>
+                                <p style="margin: 8px 0 0 0; color: #721c24;">Если получаете ошибки "Ошибка сети" или "CORS", попробуйте:</p>
+                            </div>
+                            <div class="card__body">
+                                <ol style="margin: 0; padding-left: 20px;">
+                                    <li><strong>Обновите страницу</strong> (F5 или Ctrl+R)</li>
+                                    <li><strong>Используйте Chrome</strong> с запуском без CORS:
+                                        <div style="background: #f1f3f4; padding: 8px; border-radius: 4px; margin: 8px 0; font-family: monospace; font-size: 12px;">
+                                            chrome.exe --user-data-dir=/tmp/chrome_dev_test --disable-web-security --disable-features=VizDisplayCompositor
+                                        </div>
+                                    </li>
+                                    <li><strong>Установите расширение CORS Unblock</strong> для Chrome/Edge</li>
+                                    <li><strong>Используйте Firefox</strong> - обычно работает лучше с CORS</li>
+                                    <li><strong>Проверьте интернет-соединение</strong></li>
+                                </ol>
+                                <p style="margin: 16px 0 0 0; padding: 12px; background: #e8f5e8; border-radius: 4px; color: #2d5b2d;">
+                                    💡 <strong>Лучшее решение:</strong> Разместите приложение на HTTPS хостинге (Netlify, Vercel, GitHub Pages)
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Одиночная генерация -->
+            <section class="section section--active" id="single">
+                <div class="card">
+                    <div class="card__header">
+                        <h2>Генерация одного пина</h2>
+                        <p>Введите Fiverr URL для создания оптимизированного Pinterest пина</p>
+                    </div>
+                    <div class="card__body">
+                        <div class="form-group">
+                            <label for="fiverr-url" class="form-label">Fiverr URL</label>
+                            <input type="url" id="fiverr-url" class="form-control" placeholder="https://www.fiverr.com/...">
+                            <div class="form-hint">Поддерживаются URL сервисов и категорий Fiverr</div>
+                        </div>
+                        <div class="form-actions">
+                            <button class="btn btn--primary" id="generate-single">Генерировать пин</button>
+                        </div>
+                        <div class="progress-container hidden" id="single-progress">
+                            <div class="progress-bar">
+                                <div class="progress-fill" id="single-progress-fill"></div>
+                            </div>
+                            <div class="progress-text" id="single-progress-text">Анализ URL...</div>
+                        </div>
+                        <div class="status-message" id="single-status"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Пакетная обработка -->
+            <section class="section" id="batch">
+                <div class="card">
+                    <div class="card__header">
+                        <h2>Пакетная обработка</h2>
+                        <p>Обработайте до 20 Fiverr URL одновременно</p>
+                    </div>
+                    <div class="card__body">
+                        <div class="form-group">
+                            <label for="fiverr-urls" class="form-label">Fiverr URL (по одному на строке)</label>
+                            <textarea id="fiverr-urls" class="form-control" rows="10" placeholder="https://www.fiverr.com/example1&#10;https://www.fiverr.com/example2&#10;https://www.fiverr.com/example3"></textarea>
+                            <div class="form-hint">Максимум 20 URL за раз</div>
+                        </div>
+                        <div class="form-actions">
+                            <button class="btn btn--primary" id="generate-batch">Генерировать все пины</button>
+                            <button class="btn btn--secondary hidden" id="stop-batch">Остановить</button>
+                        </div>
+                        <div class="progress-container hidden" id="batch-progress">
+                            <div class="progress-bar">
+                                <div class="progress-fill" id="batch-progress-fill"></div>
+                            </div>
+                            <div class="progress-text" id="batch-progress-text">Обработка URL...</div>
+                        </div>
+                        <div class="status-message" id="batch-status"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Результаты -->
+            <section class="section" id="results">
+                <div class="results-header">
+                    <h2>Результаты генерации</h2>
+                    <div class="results-actions">
+                        <button class="btn btn--secondary" id="export-all">Экспортировать все</button>
+                        <button class="btn btn--outline" id="clear-results">Очистить результаты</button>
+                    </div>
+                </div>
+                <div class="results-container" id="results-container">
+                    <div class="empty-state">
+                        <h3>Нет результатов</h3>
+                        <p>Генерируйте Pinterest пины чтобы увидеть результаты здесь</p>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Модальные окна -->
+    <div class="modal-overlay hidden" id="modal-overlay">
+        <div class="modal">
+            <div class="modal__header">
+                <h3 id="modal-title">Заголовок</h3>
+                <button class="modal__close" id="modal-close">&times;</button>
+            </div>
+            <div class="modal__body" id="modal-body">
+                <!-- Содержимое модального окна -->
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
