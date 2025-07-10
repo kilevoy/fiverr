@@ -16,6 +16,14 @@ class FiverrPinterestGenerator {
             apiBaseUrl: 'https://api.anthropic.com/v1/messages',
             proxyUrl: 'https://cors-anywhere.herokuapp.com/',
             corsProxy: 'https://api.allorigins.win/raw?url=',
+            // Additional proxy options
+            corsProxies: [
+                'https://cors-anywhere.herokuapp.com/',
+                'https://api.allorigins.win/raw?url=',
+                'https://api.codetabs.com/v1/proxy?quest=',
+                'https://cors.bridged.cc/',
+                'https://yacdn.org/proxy/'
+            ],
             claudeModel: 'claude-3-5-sonnet-20241022',
             maxTokens: 1500,
             temperature: 0.7,
@@ -432,20 +440,44 @@ class FiverrPinterestGenerator {
         this.showStatus('settings-status', 'Тестирование API...', 'info');
         
         try {
-            const testPrompt = 'Respond with: {"status": "ok", "message": "API connection successful"}';
+            // Use a very simple test prompt that should always work
+            const testPrompt = 'Please respond with a single word: "success"';
+            console.log('🧪 Testing API with simple prompt:', testPrompt);
+            
             const response = await this.retryOperation(() => this.makeClaudeRequest(testPrompt));
+            console.log('🧪 Test API raw response:', response);
             
-            // Try to parse response to validate it's working
-            const parsed = JSON.parse(response);
-            
-            if (parsed.status === 'ok') {
-                this.showStatus('settings-status', 'API работает корректно ✓', 'success');
-            } else {
-                this.showStatus('settings-status', 'API подключен, но ответ неожиданный', 'warning');
+            // Check if response contains "success" (case insensitive)
+            if (response && typeof response === 'string' && response.toLowerCase().includes('success')) {
+                this.showStatus('settings-status', '✅ API работает корректно!', 'success');
+                console.log('✅ API test successful');
+                return;
             }
             
+            // Try a JSON test
+            console.log('🧪 Trying JSON test...');
+            const jsonTestPrompt = 'Respond with this exact JSON: {"status": "ok", "message": "test successful"}';
+            const jsonResponse = await this.retryOperation(() => this.makeClaudeRequest(jsonTestPrompt));
+            console.log('🧪 JSON test raw response:', jsonResponse);
+            
+            // Try to parse JSON response
+            try {
+                const parsed = this.parseJSONResponse(jsonResponse);
+                if (parsed && (parsed.status === 'ok' || parsed.message === 'test successful')) {
+                    this.showStatus('settings-status', '✅ API работает корректно (JSON)!', 'success');
+                    console.log('✅ JSON API test successful');
+                    return;
+                }
+            } catch (parseError) {
+                console.log('🧪 JSON parsing in test failed:', parseError);
+            }
+            
+            // If we get here, API responds but format is unexpected
+            this.showStatus('settings-status', '⚠️ API подключен, но формат ответа неожиданный. Проверьте консоль браузера для деталей.', 'warning');
+            console.log('⚠️ API responds but format is unexpected');
+            
         } catch (error) {
-            console.error('API test failed:', error);
+            console.error('❌ API test failed:', error);
             let errorMessage = 'Ошибка API';
             
             if (error.message.includes('401') || error.message.includes('authentication_error')) {
@@ -460,6 +492,8 @@ class FiverrPinterestGenerator {
                 errorMessage = 'CORS/Сеть';
                 this.showStatus('settings-status', `${errorMessage}: ${error.message}. Проверьте инструкции ниже 👇`, 'error');
                 return;
+            } else if (error.message.includes('парсинга') || error.message.includes('формат')) {
+                errorMessage = 'Формат ответа';
             }
             
             this.showStatus('settings-status', `${errorMessage}: ${error.message}`, 'error');
@@ -986,26 +1020,122 @@ class FiverrPinterestGenerator {
     }
     
     parseJSONResponse(response) {
+        console.log('🔍 Parsing JSON response:', {
+            type: typeof response,
+            length: response?.length,
+            preview: typeof response === 'string' ? response.substring(0, 200) + '...' : response
+        });
+        
         try {
-            // Clean up response - remove any markdown formatting
-            const cleanResponse = response.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-            return JSON.parse(cleanResponse);
-        } catch (error) {
-            console.error('JSON parsing error:', error);
-            console.error('Response:', response);
+            // If response is already an object, return it
+            if (typeof response === 'object' && response !== null) {
+                console.log('✅ Response is already an object');
+                return response;
+            }
             
-            // Try to extract JSON from the response
-            const jsonMatch = response.match(/\{[\s\S]*\}/);
-            if (jsonMatch) {
-                try {
-                    return JSON.parse(jsonMatch[0]);
-                } catch (e) {
-                    console.error('Fallback JSON parsing failed:', e);
+            // Clean up response - remove any markdown formatting
+            let cleanResponse = response;
+            if (typeof response === 'string') {
+                cleanResponse = response
+                    .replace(/```json\n?/g, '')
+                    .replace(/```\n?/g, '')
+                    .replace(/^```/g, '')
+                    .replace(/```$/g, '')
+                    .trim();
+                    
+                console.log('🧹 Cleaned response:', {
+                    length: cleanResponse.length,
+                    preview: cleanResponse.substring(0, 200) + '...'
+                });
+            }
+            
+            // Try to parse the cleaned response
+            const parsed = JSON.parse(cleanResponse);
+            console.log('✅ Successfully parsed JSON:', {
+                keys: Object.keys(parsed),
+                isArray: Array.isArray(parsed)
+            });
+            
+            return parsed;
+            
+        } catch (error) {
+            console.error('❌ Primary JSON parsing failed:', error);
+            console.error('Response that failed to parse:', response);
+            
+            // Try to extract JSON from the response using regex
+            if (typeof response === 'string') {
+                console.log('🔍 Attempting to extract JSON with regex...');
+                
+                // Try different JSON extraction patterns
+                const jsonPatterns = [
+                    /\{[\s\S]*\}/,           // Basic object pattern
+                    /\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}/, // Nested objects
+                    /\{[\s\S]*?\}(?=\s*$)/m,  // Object at end of string
+                    /\{[\s\S]*?\}(?=\s*\n|$)/ // Object ending with newline or end
+                ];
+                
+                for (let i = 0; i < jsonPatterns.length; i++) {
+                    const pattern = jsonPatterns[i];
+                    const match = response.match(pattern);
+                    
+                    if (match) {
+                        try {
+                            const extracted = match[0].trim();
+                            console.log(`🎯 Pattern ${i + 1} found JSON:`, extracted.substring(0, 100) + '...');
+                            
+                            const parsed = JSON.parse(extracted);
+                            console.log(`✅ Successfully extracted JSON with pattern ${i + 1}`);
+                            return parsed;
+                            
+                        } catch (e) {
+                            console.log(`❌ Pattern ${i + 1} extraction failed:`, e.message);
+                            continue;
+                        }
+                    }
+                }
+                
+                // Try to create a valid response from common AI response patterns
+                console.log('🤖 Attempting to handle AI response patterns...');
+                
+                // Check if response contains key-value pairs we can extract
+                const servicePatterns = {
+                    title: /(?:title|название|заголовок)[\s:]+["']?([^"'\n]+)["']?/i,
+                    description: /(?:description|описание)[\s:]+["']?([^"'\n]+)["']?/i,
+                    category: /(?:category|категория)[\s:]+["']?([^"'\n]+)["']?/i,
+                    service_type: /(?:service_type|тип\s*услуги)[\s:]+["']?([^"'\n]+)["']?/i
+                };
+                
+                const extractedData = {};
+                let hasData = false;
+                
+                for (const [key, pattern] of Object.entries(servicePatterns)) {
+                    const match = response.match(pattern);
+                    if (match && match[1]) {
+                        extractedData[key] = match[1].trim();
+                        hasData = true;
+                    }
+                }
+                
+                if (hasData) {
+                    console.log('✅ Extracted data from AI response patterns:', extractedData);
+                    return {
+                        ...this.fallbackData.service_analysis,
+                        ...extractedData,
+                        extracted_from_text: true
+                    };
                 }
             }
             
-            // Return fallback data
-            return this.fallbackData.service_analysis;
+            console.log('🔄 All extraction methods failed, using fallback data');
+            
+            // Return enhanced fallback data with error info
+            return {
+                ...this.fallbackData.service_analysis,
+                parsing_error: error.message,
+                original_response: typeof response === 'string' ? response.substring(0, 500) : 'Non-string response',
+                fallback_used: true,
+                error_timestamp: new Date().toISOString()
+            };
         }
     }
     
@@ -1268,54 +1398,80 @@ class FiverrPinterestGenerator {
                     headers: requestHeaders,
                     body: JSON.stringify(requestBody),
                     signal: controller.signal
-                }
-            },
-            // Method 2: Using cors-anywhere proxy
-            {
-                url: this.config.proxyUrl + this.config.apiBaseUrl,
-                options: {
-                    method: 'POST',
-                    headers: {
-                        ...requestHeaders,
-                        'X-Requested-With': 'XMLHttpRequest'
-                    },
-                    body: JSON.stringify(requestBody),
-                    signal: controller.signal
-                }
-            },
-            // Method 3: Using allorigins proxy
-            {
-                url: this.config.corsProxy + encodeURIComponent(this.config.apiBaseUrl),
-                options: {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        method: 'POST',
-                        headers: requestHeaders,
-                        body: JSON.stringify(requestBody)
-                    }),
-                    signal: controller.signal
-                }
+                },
+                name: 'Direct'
             }
         ];
+        
+        // Add all available proxy methods
+        this.config.corsProxies.forEach((proxy, index) => {
+            if (proxy.includes('allorigins.win')) {
+                // AllOrigins proxy format
+                corsOptions.push({
+                    url: proxy + encodeURIComponent(this.config.apiBaseUrl),
+                    options: {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            method: 'POST',
+                            headers: requestHeaders,
+                            body: JSON.stringify(requestBody)
+                        }),
+                        signal: controller.signal
+                    },
+                    name: `AllOrigins-${index + 1}`
+                });
+            } else if (proxy.includes('codetabs.com')) {
+                // CodeTabs proxy format
+                corsOptions.push({
+                    url: proxy + encodeURIComponent(this.config.apiBaseUrl),
+                    options: {
+                        method: 'POST',
+                        headers: requestHeaders,
+                        body: JSON.stringify(requestBody),
+                        signal: controller.signal
+                    },
+                    name: `CodeTabs-${index + 1}`
+                });
+            } else {
+                // Standard proxy format (cors-anywhere style)
+                corsOptions.push({
+                    url: proxy + this.config.apiBaseUrl,
+                    options: {
+                        method: 'POST',
+                        headers: {
+                            ...requestHeaders,
+                            'X-Requested-With': 'XMLHttpRequest'
+                        },
+                        body: JSON.stringify(requestBody),
+                        signal: controller.signal
+                    },
+                    name: `Proxy-${index + 1}`
+                });
+            }
+        });
         
         let lastError = null;
         
         for (let i = 0; i < corsOptions.length; i++) {
-            const { url, options } = corsOptions[i];
+            const { url, options, name } = corsOptions[i];
             
             try {
-                console.log(`Attempting CORS method ${i + 1}/${corsOptions.length}:`, url.substring(0, 50) + '...');
+                console.log(`🔄 Attempting method ${i + 1}/${corsOptions.length} (${name}):`, url.substring(0, 50) + '...');
                 
                 const response = await fetch(url, options);
                 
-                console.log('Response status:', response.status, response.statusText);
+                console.log(`📡 ${name} response:`, {
+                    status: response.status,
+                    statusText: response.statusText,
+                    headers: Object.fromEntries(response.headers.entries())
+                });
                 
                 if (!response.ok) {
                     const errorText = await response.text();
-                    console.error(`Method ${i + 1} failed:`, errorText);
+                    console.error(`❌ ${name} failed with ${response.status}:`, errorText);
                     
                     let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
                     
@@ -1340,28 +1496,104 @@ class FiverrPinterestGenerator {
                     continue; // Try next method
                 }
                 
+                // Get response text first for debugging
+                const responseText = await response.text();
+                console.log(`📄 ${name} raw response:`, responseText.substring(0, 500) + (responseText.length > 500 ? '...' : ''));
+                
                 let data;
-                if (i === 2) { // allorigins proxy returns different format
-                    const textResponse = await response.text();
-                    data = JSON.parse(textResponse);
-                } else {
-                    data = await response.json();
-                }
-                
-                console.log('Response data structure:', Object.keys(data));
-                
-                if (!data.content || !data.content[0] || !data.content[0].text) {
-                    console.error('Invalid response structure:', data);
-                    lastError = new Error('Неверный формат ответа API');
+                try {
+                    if (name.includes('AllOrigins')) {
+                        // For AllOrigins, the response might be wrapped
+                        data = JSON.parse(responseText);
+                        // If AllOrigins wraps the response, unwrap it
+                        if (data.contents) {
+                            try {
+                                data = JSON.parse(data.contents);
+                            } catch (innerParseError) {
+                                console.log(`📄 ${name} contents parse failed, using outer response`);
+                                // Use the outer response if inner parsing fails
+                            }
+                        }
+                    } else if (name.includes('CodeTabs')) {
+                        // CodeTabs might return plain text or JSON
+                        try {
+                            data = JSON.parse(responseText);
+                        } catch (parseError) {
+                            // If JSON parsing fails, treat as plain text response
+                            data = { text: responseText };
+                        }
+                    } else {
+                        // Standard proxy or direct request
+                        data = JSON.parse(responseText);
+                    }
+                } catch (parseError) {
+                    console.error(`❌ ${name} JSON parse error:`, parseError);
+                    console.error('Response text that failed to parse:', responseText);
+                    lastError = new Error(`Ошибка парсинга ответа ${name}: ${parseError.message}`);
                     continue;
                 }
                 
-                console.log(`API request successful with method ${i + 1}`);
+                console.log(`📊 ${name} parsed data structure:`, {
+                    keys: Object.keys(data),
+                    hasContent: !!data.content,
+                    contentType: Array.isArray(data.content),
+                    contentLength: data.content?.length
+                });
+                
+                // Flexible response structure handling
+                let responseContent = null;
+                
+                if (data.content && Array.isArray(data.content) && data.content[0] && data.content[0].text) {
+                    // Standard Claude API format
+                    responseContent = data.content[0].text;
+                } else if (data.completion) {
+                    // Alternative format
+                    responseContent = data.completion;
+                } else if (data.response) {
+                    // Another alternative format
+                    responseContent = data.response;
+                } else if (data.text) {
+                    // Direct text response (from CodeTabs or other proxies)
+                    responseContent = data.text;
+                } else if (data.message) {
+                    // Message format
+                    responseContent = data.message;
+                } else if (data.result) {
+                    // Result format
+                    responseContent = data.result;
+                } else if (typeof data === 'string') {
+                    // Direct string response
+                    responseContent = data;
+                } else if (data.choices && Array.isArray(data.choices) && data.choices[0]) {
+                    // OpenAI-style format (some proxies might convert)
+                    if (data.choices[0].message && data.choices[0].message.content) {
+                        responseContent = data.choices[0].message.content;
+                    } else if (data.choices[0].text) {
+                        responseContent = data.choices[0].text;
+                    }
+                } else {
+                    // Log the full response structure for debugging
+                    console.error(`❌ ${name} unexpected response structure:`, JSON.stringify(data, null, 2));
+                    lastError = new Error(`Неожиданная структура ответа ${name}. Проверьте консоль для деталей.`);
+                    continue;
+                }
+                
+                if (!responseContent || typeof responseContent !== 'string') {
+                    console.error(`❌ ${name} invalid response content:`, responseContent);
+                    lastError = new Error(`Пустой или неверный контент ответа ${name}`);
+                    continue;
+                }
+                
+                console.log(`✅ ${name} request successful!`, {
+                    contentLength: responseContent.length,
+                    preview: responseContent.substring(0, 100) + '...'
+                });
+                
                 clearTimeout(timeoutId);
-                return data.content[0].text;
+                return responseContent;
                 
             } catch (error) {
-                console.error(`Method ${i + 1} failed:`, error);
+                console.error(`❌ ${name} method failed:`, error);
                 lastError = error;
                 continue;
             }
@@ -1371,7 +1603,7 @@ class FiverrPinterestGenerator {
         
         // If all methods failed, throw the last error
         if (lastError) {
-            console.error('All CORS methods failed:', lastError);
+            console.error('💥 All CORS methods failed:', lastError);
             
             if (lastError.name === 'AbortError') {
                 throw new Error('Тайм-аут запроса к API (30 секунд)');
