@@ -1020,122 +1020,259 @@ class FiverrPinterestGenerator {
     }
     
     parseJSONResponse(response) {
-        console.log('🔍 Parsing JSON response:', {
-            type: typeof response,
-            length: response?.length,
-            preview: typeof response === 'string' ? response.substring(0, 200) + '...' : response
+        console.log('🔍 DETAILED JSON PARSING:', {
+            responseType: typeof response,
+            responseLength: response?.length,
+            responseConstructor: response?.constructor?.name,
+            isString: typeof response === 'string',
+            isObject: typeof response === 'object',
+            isArray: Array.isArray(response),
+            preview: typeof response === 'string' ? 
+                response.substring(0, 300) + '...' : 
+                JSON.stringify(response, null, 2).substring(0, 300) + '...'
         });
         
         try {
             // If response is already an object, return it
             if (typeof response === 'object' && response !== null) {
-                console.log('✅ Response is already an object');
+                console.log('✅ Response is already an object:', Object.keys(response));
                 return response;
             }
             
-            // Clean up response - remove any markdown formatting
-            let cleanResponse = response;
-            if (typeof response === 'string') {
-                cleanResponse = response
-                    .replace(/```json\n?/g, '')
-                    .replace(/```\n?/g, '')
-                    .replace(/^```/g, '')
-                    .replace(/```$/g, '')
-                    .trim();
-                    
-                console.log('🧹 Cleaned response:', {
-                    length: cleanResponse.length,
-                    preview: cleanResponse.substring(0, 200) + '...'
-                });
-            }
-            
-            // Try to parse the cleaned response
-            const parsed = JSON.parse(cleanResponse);
-            console.log('✅ Successfully parsed JSON:', {
-                keys: Object.keys(parsed),
-                isArray: Array.isArray(parsed)
+            // Convert to string if needed
+            let responseStr = String(response);
+            console.log('📝 Response converted to string:', {
+                length: responseStr.length,
+                firstChar: responseStr.charAt(0),
+                lastChar: responseStr.charAt(responseStr.length - 1),
+                preview: responseStr.substring(0, 200) + '...'
             });
             
-            return parsed;
-            
-        } catch (error) {
-            console.error('❌ Primary JSON parsing failed:', error);
-            console.error('Response that failed to parse:', response);
-            
-            // Try to extract JSON from the response using regex
-            if (typeof response === 'string') {
-                console.log('🔍 Attempting to extract JSON with regex...');
+            // Clean up response - remove any markdown formatting
+            let cleanResponse = responseStr
+                .replace(/```json\s*/g, '')
+                .replace(/```\s*/g, '')
+                .replace(/^```/g, '')
+                .replace(/```$/g, '')
+                .trim();
                 
-                // Try different JSON extraction patterns
-                const jsonPatterns = [
-                    /\{[\s\S]*\}/,           // Basic object pattern
-                    /\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}/, // Nested objects
-                    /\{[\s\S]*?\}(?=\s*$)/m,  // Object at end of string
-                    /\{[\s\S]*?\}(?=\s*\n|$)/ // Object ending with newline or end
+            console.log('🧹 After basic cleanup:', {
+                length: cleanResponse.length,
+                preview: cleanResponse.substring(0, 200) + '...'
+            });
+            
+            // Try to parse the cleaned response
+            try {
+                const parsed = JSON.parse(cleanResponse);
+                console.log('✅ JSON.parse successful:', {
+                    type: typeof parsed,
+                    keys: Object.keys(parsed),
+                    isArray: Array.isArray(parsed)
+                });
+                return parsed;
+            } catch (directParseError) {
+                console.log('❌ Direct JSON.parse failed:', directParseError.message);
+                console.log('💭 Trying advanced extraction methods...');
+                
+                // Method 1: Try to extract JSON blocks
+                const jsonBlockPatterns = [
+                    /```json\s*(\{[\s\S]*?\})\s*```/g,
+                    /```\s*(\{[\s\S]*?\})\s*```/g,
+                    /(\{[\s\S]*?\})(?=\s*(?:\n\s*\n|\n\s*$|$))/g
                 ];
                 
-                for (let i = 0; i < jsonPatterns.length; i++) {
-                    const pattern = jsonPatterns[i];
-                    const match = response.match(pattern);
+                for (let i = 0; i < jsonBlockPatterns.length; i++) {
+                    const matches = [...responseStr.matchAll(jsonBlockPatterns[i])];
+                    console.log(`🔍 Pattern ${i + 1} found ${matches.length} matches`);
                     
-                    if (match) {
+                    for (const match of matches) {
                         try {
-                            const extracted = match[0].trim();
-                            console.log(`🎯 Pattern ${i + 1} found JSON:`, extracted.substring(0, 100) + '...');
-                            
-                            const parsed = JSON.parse(extracted);
-                            console.log(`✅ Successfully extracted JSON with pattern ${i + 1}`);
+                            const jsonCandidate = match[1] || match[0];
+                            const parsed = JSON.parse(jsonCandidate);
+                            console.log(`✅ Pattern ${i + 1} extraction successful!`);
                             return parsed;
-                            
                         } catch (e) {
                             console.log(`❌ Pattern ${i + 1} extraction failed:`, e.message);
-                            continue;
                         }
                     }
                 }
                 
-                // Try to create a valid response from common AI response patterns
-                console.log('🤖 Attempting to handle AI response patterns...');
+                // Method 2: Try to find JSON-like structures
+                const jsonPatterns = [
+                    /\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}/g,
+                    /\{\s*"[^"]*"\s*:[^{}]*\}/g,
+                    /\{[\s\S]*?\}/g
+                ];
                 
-                // Check if response contains key-value pairs we can extract
-                const servicePatterns = {
-                    title: /(?:title|название|заголовок)[\s:]+["']?([^"'\n]+)["']?/i,
-                    description: /(?:description|описание)[\s:]+["']?([^"'\n]+)["']?/i,
-                    category: /(?:category|категория)[\s:]+["']?([^"'\n]+)["']?/i,
-                    service_type: /(?:service_type|тип\s*услуги)[\s:]+["']?([^"'\n]+)["']?/i
-                };
-                
-                const extractedData = {};
-                let hasData = false;
-                
-                for (const [key, pattern] of Object.entries(servicePatterns)) {
-                    const match = response.match(pattern);
-                    if (match && match[1]) {
-                        extractedData[key] = match[1].trim();
-                        hasData = true;
+                for (let i = 0; i < jsonPatterns.length; i++) {
+                    const matches = responseStr.match(jsonPatterns[i]);
+                    if (matches) {
+                        console.log(`🔍 JSON pattern ${i + 1} found ${matches.length} matches`);
+                        
+                        for (const match of matches) {
+                            try {
+                                const parsed = JSON.parse(match);
+                                console.log(`✅ JSON pattern ${i + 1} successful!`);
+                                return parsed;
+                            } catch (e) {
+                                console.log(`❌ JSON pattern ${i + 1} failed:`, e.message);
+                            }
+                        }
                     }
                 }
                 
-                if (hasData) {
-                    console.log('✅ Extracted data from AI response patterns:', extractedData);
+                // Method 3: Try to handle different Claude response formats
+                console.log('🤖 Trying Claude-specific format handling...');
+                
+                // Look for content within quotes
+                const quotedContentPattern = /"([^"]*(?:\{[^"]*\}[^"]*)*[^"]*)"/g;
+                const quotedMatches = [...responseStr.matchAll(quotedContentPattern)];
+                
+                for (const match of quotedMatches) {
+                    try {
+                        const content = match[1];
+                        if (content.includes('{') && content.includes('}')) {
+                            const parsed = JSON.parse(content);
+                            console.log('✅ Quoted content extraction successful!');
+                            return parsed;
+                        }
+                    } catch (e) {
+                        console.log('❌ Quoted content extraction failed:', e.message);
+                    }
+                }
+                
+                // Method 4: Try to extract key-value pairs and construct JSON
+                console.log('🔧 Trying to construct JSON from key-value pairs...');
+                
+                const keyValuePatterns = [
+                    /"([^"]+)"\s*:\s*"([^"]+)"/g,
+                    /"([^"]+)"\s*:\s*\[([^\]]+)\]/g,
+                    /([a-zA-Z_][a-zA-Z0-9_]*)\s*:\s*"([^"]+)"/g,
+                    /([a-zA-Z_][a-zA-Z0-9_]*)\s*:\s*\[([^\]]+)\]/g
+                ];
+                
+                const extractedData = {};
+                let foundPairs = false;
+                
+                for (const pattern of keyValuePatterns) {
+                    const matches = [...responseStr.matchAll(pattern)];
+                    for (const match of matches) {
+                        const key = match[1];
+                        let value = match[2];
+                        
+                        // Try to parse value as JSON if it looks like an array
+                        if (value.startsWith('[') || value.startsWith('{')) {
+                            try {
+                                value = JSON.parse(value);
+                            } catch (e) {
+                                // Keep as string if not valid JSON
+                            }
+                        }
+                        
+                        extractedData[key] = value;
+                        foundPairs = true;
+                    }
+                }
+                
+                if (foundPairs) {
+                    console.log('✅ Constructed JSON from key-value pairs:', extractedData);
+                    return extractedData;
+                }
+                
+                // Method 5: Try to handle common Claude response text patterns
+                console.log('🔍 Trying text pattern extraction...');
+                
+                const textPatterns = {
+                    title: /(?:title|название|заголовок|service[_\s]name)[\s:]+["']?([^"'\n\r]+)["']?/i,
+                    description: /(?:description|описание|desc)[\s:]+["']?([^"'\n\r]+)["']?/i,
+                    category: /(?:category|категория|cat)[\s:]+["']?([^"'\n\r]+)["']?/i,
+                    service_type: /(?:service[_\s]type|тип[_\s]услуги|type)[\s:]+["']?([^"'\n\r]+)["']?/i,
+                    target_audience: /(?:target[_\s]audience|целевая[_\s]аудитория|audience)[\s:]+["']?([^"'\n\r]+)["']?/i,
+                    price_range: /(?:price[_\s]range|ценовая[_\s]категория|price)[\s:]+["']?([^"'\n\r]+)["']?/i,
+                    key_benefits: /(?:key[_\s]benefits|преимущества|benefits)[\s:]+["']?([^"'\n\r]+)["']?/i,
+                    main_benefits: /(?:main[_\s]benefits|основные[_\s]преимущества|benefits)[\s:]+["']?([^"'\n\r]+)["']?/i,
+                    related_keywords: /(?:related[_\s]keywords|ключевые[_\s]слова|keywords)[\s:]+["']?([^"'\n\r]+)["']?/i
+                };
+                
+                const extractedTextData = {};
+                let foundTextData = false;
+                
+                for (const [key, pattern] of Object.entries(textPatterns)) {
+                    const match = responseStr.match(pattern);
+                    if (match && match[1]) {
+                        let value = match[1].trim();
+                        
+                        // Try to parse comma-separated values as arrays
+                        if (key.includes('benefits') || key.includes('keywords')) {
+                            if (value.includes(',')) {
+                                value = value.split(',').map(item => item.trim());
+                            }
+                        }
+                        
+                        extractedTextData[key] = value;
+                        foundTextData = true;
+                    }
+                }
+                
+                if (foundTextData) {
+                    console.log('✅ Extracted data from text patterns:', extractedTextData);
                     return {
                         ...this.fallbackData.service_analysis,
-                        ...extractedData,
-                        extracted_from_text: true
+                        ...extractedTextData,
+                        extracted_from_text: true,
+                        parsing_method: 'text_pattern_extraction'
                     };
                 }
+                
+                // Method 6: Try to handle if the response is just a title or simple text
+                if (responseStr.length > 10 && responseStr.length < 200) {
+                    console.log('🔍 Trying simple text response handling...');
+                    
+                    const simpleResponse = {
+                        ...this.fallbackData.service_analysis,
+                        title: responseStr.substring(0, 100),
+                        description: responseStr.substring(0, 200),
+                        simple_text_response: true,
+                        parsing_method: 'simple_text_fallback'
+                    };
+                    
+                    console.log('✅ Created simple text response:', simpleResponse);
+                    return simpleResponse;
+                }
+                
+                throw directParseError; // Re-throw original error if nothing worked
             }
             
-            console.log('🔄 All extraction methods failed, using fallback data');
+        } catch (error) {
+            console.error('💥 All parsing methods failed:', error);
+            console.error('📄 Original response:', response);
             
-            // Return enhanced fallback data with error info
-            return {
+            // Create enhanced fallback data with error info
+            const fallbackResponse = {
                 ...this.fallbackData.service_analysis,
                 parsing_error: error.message,
-                original_response: typeof response === 'string' ? response.substring(0, 500) : 'Non-string response',
+                original_response: typeof response === 'string' ? 
+                    response.substring(0, 1000) : 
+                    JSON.stringify(response, null, 2).substring(0, 1000),
+                original_response_type: typeof response,
+                original_response_length: response?.length || 0,
                 fallback_used: true,
-                error_timestamp: new Date().toISOString()
+                parsing_method: 'complete_fallback',
+                error_timestamp: new Date().toISOString(),
+                debug_info: {
+                    isString: typeof response === 'string',
+                    isObject: typeof response === 'object',
+                    isArray: Array.isArray(response),
+                    constructor: response?.constructor?.name,
+                    hasContent: response?.content !== undefined,
+                    hasMessage: response?.message !== undefined,
+                    hasText: response?.text !== undefined,
+                    hasChoices: response?.choices !== undefined
+                }
             };
+            
+            console.log('🔄 Using enhanced fallback data:', fallbackResponse);
+            return fallbackResponse;
         }
     }
     
@@ -1498,46 +1635,107 @@ class FiverrPinterestGenerator {
                 
                 // Get response text first for debugging
                 const responseText = await response.text();
-                console.log(`📄 ${name} raw response:`, responseText.substring(0, 500) + (responseText.length > 500 ? '...' : ''));
+                console.log(`📄 ${name} raw response details:`, {
+                    length: responseText.length,
+                    type: typeof responseText,
+                    isEmpty: responseText.length === 0,
+                    firstChar: responseText.charAt(0),
+                    lastChar: responseText.charAt(responseText.length - 1),
+                    containsJson: responseText.includes('{') && responseText.includes('}'),
+                    containsContent: responseText.includes('content'),
+                    containsMessage: responseText.includes('message'),
+                    containsText: responseText.includes('text'),
+                    preview: responseText.substring(0, 500) + (responseText.length > 500 ? '...' : '')
+                });
+                
+                // If response is empty, try next method
+                if (!responseText || responseText.length === 0) {
+                    console.error(`❌ ${name} returned empty response`);
+                    lastError = new Error(`${name} вернул пустой ответ`);
+                    continue;
+                }
                 
                 let data;
                 try {
                     if (name.includes('AllOrigins')) {
                         // For AllOrigins, the response might be wrapped
+                        console.log(`🔍 ${name} processing AllOrigins format...`);
                         data = JSON.parse(responseText);
+                        console.log(`🔍 ${name} AllOrigins parsed data:`, {
+                            keys: Object.keys(data),
+                            hasContents: !!data.contents,
+                            hasStatus: !!data.status,
+                            statusText: data.status?.text || 'none'
+                        });
+                        
                         // If AllOrigins wraps the response, unwrap it
                         if (data.contents) {
                             try {
-                                data = JSON.parse(data.contents);
+                                console.log(`🔍 ${name} trying to parse AllOrigins contents...`);
+                                const innerData = JSON.parse(data.contents);
+                                console.log(`✅ ${name} AllOrigins contents parsed successfully`);
+                                data = innerData;
                             } catch (innerParseError) {
-                                console.log(`📄 ${name} contents parse failed, using outer response`);
+                                console.log(`❌ ${name} contents parse failed:`, innerParseError.message);
+                                console.log(`📄 ${name} raw contents:`, data.contents?.substring(0, 300) + '...');
                                 // Use the outer response if inner parsing fails
                             }
                         }
                     } else if (name.includes('CodeTabs')) {
                         // CodeTabs might return plain text or JSON
+                        console.log(`🔍 ${name} processing CodeTabs format...`);
                         try {
                             data = JSON.parse(responseText);
+                            console.log(`✅ ${name} CodeTabs JSON parsed successfully`);
                         } catch (parseError) {
+                            console.log(`🔍 ${name} CodeTabs JSON parse failed, treating as plain text`);
                             // If JSON parsing fails, treat as plain text response
-                            data = { text: responseText };
+                            data = { 
+                                text: responseText,
+                                content: [{ text: responseText }],
+                                message: responseText,
+                                response: responseText
+                            };
                         }
                     } else {
                         // Standard proxy or direct request
+                        console.log(`🔍 ${name} processing standard format...`);
                         data = JSON.parse(responseText);
+                        console.log(`✅ ${name} standard JSON parsed successfully`);
                     }
                 } catch (parseError) {
                     console.error(`❌ ${name} JSON parse error:`, parseError);
-                    console.error('Response text that failed to parse:', responseText);
-                    lastError = new Error(`Ошибка парсинга ответа ${name}: ${parseError.message}`);
-                    continue;
+                    console.error(`📄 ${name} response text that failed to parse:`, responseText.substring(0, 500) + '...');
+                    
+                    // Try to handle non-JSON responses
+                    if (responseText.includes('anthropic') || responseText.includes('claude') || responseText.includes('Assistant')) {
+                        console.log(`🤖 ${name} appears to be a Claude text response, wrapping it...`);
+                        data = {
+                            content: [{ text: responseText }],
+                            message: responseText,
+                            text: responseText,
+                            response: responseText,
+                            raw_text_response: true
+                        };
+                    } else {
+                        lastError = new Error(`${name}: Ошибка парсинга JSON: ${parseError.message}`);
+                        continue;
+                    }
                 }
                 
-                console.log(`📊 ${name} parsed data structure:`, {
+                console.log(`📊 ${name} final data structure:`, {
+                    type: typeof data,
                     keys: Object.keys(data),
                     hasContent: !!data.content,
-                    contentType: Array.isArray(data.content),
-                    contentLength: data.content?.length
+                    hasMessage: !!data.message,
+                    hasText: !!data.text,
+                    hasResponse: !!data.response,
+                    hasChoices: !!data.choices,
+                    hasCompletion: !!data.completion,
+                    hasResult: !!data.result,
+                    contentType: data.content ? (Array.isArray(data.content) ? 'array' : typeof data.content) : 'none',
+                    contentLength: data.content?.length || 0,
+                    isRawText: !!data.raw_text_response
                 });
                 
                 // Flexible response structure handling
@@ -1546,47 +1744,95 @@ class FiverrPinterestGenerator {
                 if (data.content && Array.isArray(data.content) && data.content[0] && data.content[0].text) {
                     // Standard Claude API format
                     responseContent = data.content[0].text;
+                    console.log(`✅ ${name} using standard Claude format (content[0].text)`);
+                } else if (data.content && typeof data.content === 'string') {
+                    // Direct content string
+                    responseContent = data.content;
+                    console.log(`✅ ${name} using direct content string`);
                 } else if (data.completion) {
                     // Alternative format
                     responseContent = data.completion;
+                    console.log(`✅ ${name} using completion format`);
                 } else if (data.response) {
                     // Another alternative format
                     responseContent = data.response;
+                    console.log(`✅ ${name} using response format`);
                 } else if (data.text) {
                     // Direct text response (from CodeTabs or other proxies)
                     responseContent = data.text;
+                    console.log(`✅ ${name} using text format`);
                 } else if (data.message) {
                     // Message format
                     responseContent = data.message;
+                    console.log(`✅ ${name} using message format`);
                 } else if (data.result) {
                     // Result format
                     responseContent = data.result;
+                    console.log(`✅ ${name} using result format`);
                 } else if (typeof data === 'string') {
                     // Direct string response
                     responseContent = data;
+                    console.log(`✅ ${name} using direct string response`);
                 } else if (data.choices && Array.isArray(data.choices) && data.choices[0]) {
                     // OpenAI-style format (some proxies might convert)
                     if (data.choices[0].message && data.choices[0].message.content) {
                         responseContent = data.choices[0].message.content;
+                        console.log(`✅ ${name} using OpenAI-style format (choices[0].message.content)`);
                     } else if (data.choices[0].text) {
                         responseContent = data.choices[0].text;
+                        console.log(`✅ ${name} using OpenAI-style format (choices[0].text)`);
                     }
+                } else if (data.raw_text_response) {
+                    // Raw text response we wrapped
+                    responseContent = data.text || data.message || data.response;
+                    console.log(`✅ ${name} using wrapped raw text response`);
                 } else {
                     // Log the full response structure for debugging
-                    console.error(`❌ ${name} unexpected response structure:`, JSON.stringify(data, null, 2));
-                    lastError = new Error(`Неожиданная структура ответа ${name}. Проверьте консоль для деталей.`);
+                    console.error(`❌ ${name} unexpected response structure:`, {
+                        fullData: JSON.stringify(data, null, 2),
+                        dataKeys: Object.keys(data),
+                        dataType: typeof data,
+                        sampleValues: Object.keys(data).slice(0, 5).reduce((acc, key) => {
+                            acc[key] = typeof data[key] === 'string' ? 
+                                data[key].substring(0, 100) + '...' : 
+                                typeof data[key];
+                            return acc;
+                        }, {})
+                    });
+                    lastError = new Error(`${name}: Неожиданная структура ответа. Проверьте консоль для деталей.`);
                     continue;
                 }
                 
+                console.log(`📝 ${name} extracted content:`, {
+                    hasContent: !!responseContent,
+                    contentType: typeof responseContent,
+                    contentLength: responseContent?.length || 0,
+                    isEmpty: !responseContent || responseContent.length === 0,
+                    preview: responseContent ? responseContent.substring(0, 200) + '...' : 'null'
+                });
+                
                 if (!responseContent || typeof responseContent !== 'string') {
-                    console.error(`❌ ${name} invalid response content:`, responseContent);
-                    lastError = new Error(`Пустой или неверный контент ответа ${name}`);
+                    console.error(`❌ ${name} invalid response content:`, {
+                        content: responseContent,
+                        type: typeof responseContent,
+                        isNull: responseContent === null,
+                        isUndefined: responseContent === undefined,
+                        isEmpty: responseContent === ''
+                    });
+                    lastError = new Error(`${name}: Пустой или неверный контент ответа`);
                     continue;
+                }
+                
+                // Final validation
+                if (responseContent.length < 10) {
+                    console.log(`⚠️ ${name} response seems very short:`, responseContent);
                 }
                 
                 console.log(`✅ ${name} request successful!`, {
+                    method: name,
                     contentLength: responseContent.length,
-                    preview: responseContent.substring(0, 100) + '...'
+                    preview: responseContent.substring(0, 150) + '...',
+                    hasJson: responseContent.includes('{') && responseContent.includes('}')
                 });
                 
                 clearTimeout(timeoutId);
