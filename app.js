@@ -14,12 +14,15 @@ class FiverrPinterestGenerator {
         // Application data
         this.config = {
             apiBaseUrl: 'https://api.anthropic.com/v1/messages',
+            proxyUrl: 'https://cors-anywhere.herokuapp.com/',
+            corsProxy: 'https://api.allorigins.win/raw?url=',
             claudeModel: 'claude-3-5-sonnet-20241022',
             maxTokens: 1500,
             temperature: 0.7,
             requestTimeout: 30000, // 30 seconds timeout
             maxConcurrentRequests: 5,
-            cacheExpiry: 3600000 // 1 hour cache expiry
+            cacheExpiry: 3600000, // 1 hour cache expiry
+            useCorsProxy: true // Enable CORS proxy by default
         };
         
         this.fallbackData = {
@@ -1220,9 +1223,9 @@ class FiverrPinterestGenerator {
         }
         
         console.log('Making Claude API request...', {
-            url: this.config.apiBaseUrl,
             model: this.config.claudeModel,
-            promptLength: prompt.length
+            promptLength: prompt.length,
+            useCorsProxy: this.config.useCorsProxy
         });
         
         const controller = new AbortController();
@@ -1254,81 +1257,138 @@ class FiverrPinterestGenerator {
         console.log('Request headers:', Object.keys(requestHeaders));
         console.log('Request body structure:', Object.keys(requestBody));
         
-        try {
-            const response = await fetch(this.config.apiBaseUrl, {
-                method: 'POST',
-                mode: 'cors',
-                headers: requestHeaders,
-                body: JSON.stringify(requestBody),
-                signal: controller.signal
-            });
+        // Try different CORS bypass methods
+        const corsOptions = [
+            // Method 1: Direct request (might work if CORS is disabled)
+            {
+                url: this.config.apiBaseUrl,
+                options: {
+                    method: 'POST',
+                    mode: 'cors',
+                    headers: requestHeaders,
+                    body: JSON.stringify(requestBody),
+                    signal: controller.signal
+                }
+            },
+            // Method 2: Using cors-anywhere proxy
+            {
+                url: this.config.proxyUrl + this.config.apiBaseUrl,
+                options: {
+                    method: 'POST',
+                    headers: {
+                        ...requestHeaders,
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    body: JSON.stringify(requestBody),
+                    signal: controller.signal
+                }
+            },
+            // Method 3: Using allorigins proxy
+            {
+                url: this.config.corsProxy + encodeURIComponent(this.config.apiBaseUrl),
+                options: {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        method: 'POST',
+                        headers: requestHeaders,
+                        body: JSON.stringify(requestBody)
+                    }),
+                    signal: controller.signal
+                }
+            }
+        ];
+        
+        let lastError = null;
+        
+        for (let i = 0; i < corsOptions.length; i++) {
+            const { url, options } = corsOptions[i];
             
-            clearTimeout(timeoutId);
-            
-            console.log('Response status:', response.status, response.statusText);
-            console.log('Response headers:', Object.fromEntries(response.headers.entries()));
-            
-            if (!response.ok) {
-                const errorText = await response.text();
-                console.error('API Error Response:', errorText);
+            try {
+                console.log(`Attempting CORS method ${i + 1}/${corsOptions.length}:`, url.substring(0, 50) + '...');
                 
-                let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+                const response = await fetch(url, options);
                 
-                try {
-                    const errorData = JSON.parse(errorText);
-                    if (errorData.error) {
-                        if (errorData.error.type === 'authentication_error') {
-                            errorMessage = 'Неверный API ключ или ключ истек';
-                        } else if (errorData.error.type === 'permission_error') {
-                            errorMessage = 'Нет доступа к API. Проверьте план подписки';
-                        } else if (errorData.error.type === 'rate_limit_error') {
-                            errorMessage = 'Превышен лимит запросов. Попробуйте позже';
-                        } else {
-                            errorMessage = errorData.error.message || errorMessage;
+                console.log('Response status:', response.status, response.statusText);
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error(`Method ${i + 1} failed:`, errorText);
+                    
+                    let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+                    
+                    try {
+                        const errorData = JSON.parse(errorText);
+                        if (errorData.error) {
+                            if (errorData.error.type === 'authentication_error') {
+                                errorMessage = 'Неверный API ключ или ключ истек';
+                            } else if (errorData.error.type === 'permission_error') {
+                                errorMessage = 'Нет доступа к API. Проверьте план подписки';
+                            } else if (errorData.error.type === 'rate_limit_error') {
+                                errorMessage = 'Превышен лимит запросов. Попробуйте позже';
+                            } else {
+                                errorMessage = errorData.error.message || errorMessage;
+                            }
                         }
+                    } catch (e) {
+                        // Ignore parsing errors
                     }
-                } catch (e) {
-                    console.error('Failed to parse error response:', e);
+                    
+                    lastError = new Error(errorMessage);
+                    continue; // Try next method
                 }
                 
-                throw new Error(errorMessage);
+                let data;
+                if (i === 2) { // allorigins proxy returns different format
+                    const textResponse = await response.text();
+                    data = JSON.parse(textResponse);
+                } else {
+                    data = await response.json();
+                }
+                
+                console.log('Response data structure:', Object.keys(data));
+                
+                if (!data.content || !data.content[0] || !data.content[0].text) {
+                    console.error('Invalid response structure:', data);
+                    lastError = new Error('Неверный формат ответа API');
+                    continue;
+                }
+                
+                console.log(`API request successful with method ${i + 1}`);
+                clearTimeout(timeoutId);
+                return data.content[0].text;
+                
+            } catch (error) {
+                console.error(`Method ${i + 1} failed:`, error);
+                lastError = error;
+                continue;
             }
+        }
+        
+        clearTimeout(timeoutId);
+        
+        // If all methods failed, throw the last error
+        if (lastError) {
+            console.error('All CORS methods failed:', lastError);
             
-            const data = await response.json();
-            console.log('Response data structure:', Object.keys(data));
-            
-            if (!data.content || !data.content[0] || !data.content[0].text) {
-                console.error('Invalid response structure:', data);
-                throw new Error('Неверный формат ответа API');
-            }
-            
-            console.log('API request successful');
-            return data.content[0].text;
-            
-        } catch (error) {
-            clearTimeout(timeoutId);
-            
-            console.error('API Request Error:', error);
-            
-            if (error.name === 'AbortError') {
+            if (lastError.name === 'AbortError') {
                 throw new Error('Тайм-аут запроса к API (30 секунд)');
             }
             
-            if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
-                // More specific network error handling
+            if (lastError.message.includes('Failed to fetch') || lastError.message.includes('NetworkError')) {
                 if (navigator.onLine === false) {
                     throw new Error('Нет интернет-соединения');
                 } else {
-                    throw new Error('Ошибка сети или CORS. Попробуйте: 1) Обновить страницу 2) Использовать другой браузер 3) Проверить интернет-соединение');
+                    throw new Error('Ошибка сети или CORS. Попробуйте: 1) Обновить страницу 2) Использовать другой браузер 3) Отключить блокировщик рекламы');
                 }
             }
             
-            if (error.message.includes('CORS')) {
-                throw new Error('CORS ошибка. Попробуйте открыть приложение через HTTPS или другой браузер');
-            }
-            
-            throw error;
+            throw lastError;
         }
+        
+        throw new Error('Все методы обхода CORS неуспешны');
     }
     
     showProgress(containerId, fillId, textId, progress, text) {

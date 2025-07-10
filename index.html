@@ -58,24 +58,73 @@
                         <!-- CORS Troubleshooting Section -->
                         <div class="card" style="margin-top: 24px; border: 2px solid #e74c3c;">
                             <div class="card__header" style="background: #fdf2f2;">
-                                <h3 style="color: #e74c3c; margin: 0;">🚨 Проблемы с сетью?</h3>
-                                <p style="margin: 8px 0 0 0; color: #721c24;">Если получаете ошибки "Ошибка сети" или "CORS", попробуйте:</p>
+                                <h3 style="color: #e74c3c; margin: 0;">🚨 Проблемы с CORS/Сетью?</h3>
+                                <p style="margin: 8px 0 0 0; color: #721c24;">Если получаете ошибки "Ошибка сети" или "CORS", попробуйте эти решения:</p>
                             </div>
                             <div class="card__body">
-                                <ol style="margin: 0; padding-left: 20px;">
-                                    <li><strong>Обновите страницу</strong> (F5 или Ctrl+R)</li>
-                                    <li><strong>Используйте Chrome</strong> с запуском без CORS:
-                                        <div style="background: #f1f3f4; padding: 8px; border-radius: 4px; margin: 8px 0; font-family: monospace; font-size: 12px;">
-                                            chrome.exe --user-data-dir=/tmp/chrome_dev_test --disable-web-security --disable-features=VizDisplayCompositor
-                                        </div>
-                                    </li>
-                                    <li><strong>Установите расширение CORS Unblock</strong> для Chrome/Edge</li>
-                                    <li><strong>Используйте Firefox</strong> - обычно работает лучше с CORS</li>
-                                    <li><strong>Проверьте интернет-соединение</strong></li>
-                                </ol>
-                                <p style="margin: 16px 0 0 0; padding: 12px; background: #e8f5e8; border-radius: 4px; color: #2d5b2d;">
-                                    💡 <strong>Лучшее решение:</strong> Разместите приложение на HTTPS хостинге (Netlify, Vercel, GitHub Pages)
-                                </p>
+                                <div style="margin-bottom: 20px;">
+                                    <h4 style="margin: 0 0 8px 0; color: #2c3e50;">🔧 Автоматические методы (уже встроены):</h4>
+                                    <ul style="margin: 0; padding-left: 20px; color: #555;">
+                                        <li>Прямой запрос к API</li>
+                                        <li>CORS-anywhere proxy</li>
+                                        <li>AllOrigins proxy</li>
+                                    </ul>
+                                </div>
+                                
+                                <div style="margin-bottom: 20px;">
+                                    <h4 style="margin: 0 0 8px 0; color: #2c3e50;">🌐 Ручные решения:</h4>
+                                    <ol style="margin: 0; padding-left: 20px;">
+                                        <li style="margin-bottom: 12px;">
+                                            <strong>Обновите страницу</strong> (F5 или Ctrl+R)
+                                        </li>
+                                        <li style="margin-bottom: 12px;">
+                                            <strong>Отключите блокировщик рекламы</strong> (AdBlock, uBlock Origin)
+                                        </li>
+                                        <li style="margin-bottom: 12px;">
+                                            <strong>Попробуйте другой браузер:</strong>
+                                            <ul style="margin: 4px 0 0 0; padding-left: 20px;">
+                                                <li>Firefox (рекомендуется)</li>
+                                                <li>Chrome (в режиме инкогнито)</li>
+                                                <li>Safari</li>
+                                                <li>Edge</li>
+                                            </ul>
+                                        </li>
+                                        <li style="margin-bottom: 12px;">
+                                            <strong>Chrome без CORS:</strong>
+                                            <div style="background: #f1f3f4; padding: 8px; border-radius: 4px; margin: 8px 0; font-family: monospace; font-size: 12px; overflow-x: auto;">
+                                                chrome.exe --user-data-dir=/tmp/chrome_dev --disable-web-security --disable-features=VizDisplayCompositor
+                                            </div>
+                                        </li>
+                                        <li style="margin-bottom: 12px;">
+                                            <strong>Расширения для Chrome/Edge:</strong>
+                                            <ul style="margin: 4px 0 0 0; padding-left: 20px;">
+                                                <li>CORS Unblock</li>
+                                                <li>CORS Everywhere</li>
+                                                <li>Disable CORS</li>
+                                            </ul>
+                                        </li>
+                                        <li style="margin-bottom: 12px;">
+                                            <strong>Проверьте интернет-соединение</strong>
+                                        </li>
+                                    </ol>
+                                </div>
+                                
+                                <div style="background: #e8f4f8; padding: 12px; border-radius: 8px; border-left: 4px solid #3498db;">
+                                    <h4 style="margin: 0 0 8px 0; color: #2c3e50;">💡 Совет:</h4>
+                                    <p style="margin: 0; color: #555; font-size: 14px;">
+                                        Приложение автоматически пробует разные методы обхода CORS. 
+                                        Если один метод не работает, попробуется следующий. 
+                                        Обычно один из методов срабатывает!
+                                    </p>
+                                </div>
+                                
+                                <div style="background: #fff3cd; padding: 12px; border-radius: 8px; border-left: 4px solid #ffc107; margin-top: 12px;">
+                                    <h4 style="margin: 0 0 8px 0; color: #856404;">⚠️ Важно:</h4>
+                                    <p style="margin: 0; color: #856404; font-size: 14px;">
+                                        CORS ошибки возникают из-за политики безопасности браузеров. 
+                                        Это нормально и не означает, что приложение сломано.
+                                    </p>
+                                </div>
                             </div>
                         </div>
                     </div>
