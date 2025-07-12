@@ -1492,12 +1492,98 @@ class FiverrPinterestGenerator {
         console.log('Making Claude API request...', {
             model: this.config.claudeModel,
             promptLength: prompt.length,
-            useCorsProxy: this.config.useCorsProxy
+            useCorsProxy: this.config.useCorsProxy,
+            isNetlify: window.location.hostname.includes('netlify.app') || window.location.hostname.includes('netlify.com')
         });
         
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), this.config.requestTimeout);
         
+        // Check if we're on Netlify and try the serverless function first
+        const isNetlify = window.location.hostname.includes('netlify.app') || 
+                         window.location.hostname.includes('netlify.com');
+        
+        if (isNetlify) {
+            try {
+                console.log('🌐 Attempting Netlify serverless function...');
+                
+                const response = await fetch('/.netlify/functions/claude-proxy', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        apiKey: this.apiKey,
+                        messages: [
+                            {
+                                role: 'user',
+                                content: prompt
+                            }
+                        ]
+                    }),
+                    signal: controller.signal
+                });
+                
+                console.log('📡 Netlify function response:', {
+                    status: response.status,
+                    statusText: response.statusText,
+                    headers: Object.fromEntries(response.headers.entries())
+                });
+                
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    console.error('❌ Netlify function error:', errorData);
+                    throw new Error(`Netlify function error: ${errorData.error || response.statusText}`);
+                }
+                
+                const data = await response.json();
+                console.log('📊 Netlify function response data structure:', {
+                    type: typeof data,
+                    keys: Object.keys(data),
+                    hasContent: !!data.content,
+                    contentType: data.content ? (Array.isArray(data.content) ? 'array' : typeof data.content) : 'none'
+                });
+                
+                // Extract content from Netlify function response
+                let responseContent = null;
+                
+                if (data.content && Array.isArray(data.content) && data.content[0] && data.content[0].text) {
+                    responseContent = data.content[0].text;
+                    console.log('✅ Netlify function using standard Claude format (content[0].text)');
+                } else if (data.content && typeof data.content === 'string') {
+                    responseContent = data.content;
+                    console.log('✅ Netlify function using direct content string');
+                } else if (data.message) {
+                    responseContent = data.message;
+                    console.log('✅ Netlify function using message format');
+                } else if (typeof data === 'string') {
+                    responseContent = data;
+                    console.log('✅ Netlify function using direct string response');
+                } else {
+                    console.error('❌ Netlify function unexpected response structure:', data);
+                    throw new Error('Неожиданная структура ответа от Netlify функции');
+                }
+                
+                if (!responseContent || typeof responseContent !== 'string') {
+                    throw new Error('Пустой или неверный контент ответа от Netlify функции');
+                }
+                
+                console.log('✅ Netlify function request successful!', {
+                    contentLength: responseContent.length,
+                    preview: responseContent.substring(0, 150) + '...'
+                });
+                
+                clearTimeout(timeoutId);
+                return responseContent;
+                
+            } catch (error) {
+                console.error('❌ Netlify function failed:', error);
+                console.log('🔄 Falling back to CORS proxy methods...');
+                // Fall through to CORS proxy methods
+            }
+        }
+        
+        // Original CORS proxy logic (fallback for non-Netlify or if Netlify function fails)
         const requestBody = {
             model: this.config.claudeModel,
             max_tokens: this.config.maxTokens,
