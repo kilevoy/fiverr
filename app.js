@@ -75,11 +75,28 @@ class FiverrPinterestGenerator {
     }
     
     init() {
-        this.bindEvents();
-        this.loadAffiliateId();
-        this.loadApiKey(); // Add this line to load saved API key
-        this.renderResults();
-        this.setupPerformanceOptimizations();
+        console.log('🚀 Initializing FiverrPinterestGenerator...');
+        
+        try {
+            this.bindEvents();
+            console.log('✅ Event binding completed');
+            
+            this.loadAffiliateId();
+            console.log('✅ Affiliate ID loaded');
+            
+            this.loadApiKey();
+            console.log('✅ API key loaded');
+            
+            this.renderResults();
+            console.log('✅ Results rendered');
+            
+            this.setupPerformanceOptimizations();
+            console.log('✅ Performance optimizations setup');
+            
+            console.log('🎉 FiverrPinterestGenerator initialized successfully!');
+        } catch (error) {
+            console.error('❌ Error during initialization:', error);
+        }
     }
     
     setupPerformanceOptimizations() {
@@ -213,87 +230,246 @@ class FiverrPinterestGenerator {
     }
     
     bindEvents() {
+        console.log('🔗 Binding event listeners...');
+        
         // Settings section
-        document.getElementById('save-settings').addEventListener('click', () => this.saveSettings());
-        document.getElementById('test-api').addEventListener('click', () => this.testAPI());
-        document.getElementById('clear-api-key').addEventListener('click', () => this.clearApiKey());
+        try {
+            const saveSettingsBtn = document.getElementById('save-settings');
+            const testApiBtn = document.getElementById('test-api');
+            const clearApiKeyBtn = document.getElementById('clear-api-key');
+            
+            console.log('🔍 Settings buttons found:', {
+                saveSettings: !!saveSettingsBtn,
+                testApi: !!testApiBtn,
+                clearApiKey: !!clearApiKeyBtn
+            });
+            
+            if (saveSettingsBtn) {
+                saveSettingsBtn.addEventListener('click', () => this.saveSettings());
+                console.log('✅ Save settings button event attached');
+            } else {
+                console.error('❌ Save settings button not found');
+            }
+            
+            if (testApiBtn) {
+                testApiBtn.addEventListener('click', () => this.testAPI());
+                console.log('✅ Test API button event attached');
+            } else {
+                console.error('❌ Test API button not found');
+            }
+            
+            if (clearApiKeyBtn) {
+                clearApiKeyBtn.addEventListener('click', () => this.clearApiKey());
+                console.log('✅ Clear API key button event attached');
+            } else {
+                console.error('❌ Clear API key button not found');
+            }
+        } catch (error) {
+            console.error('❌ Error binding settings buttons:', error);
+        }
         
         // Generation buttons
-        document.getElementById('generate-single').addEventListener('click', () => this.generateSingle());
-        document.getElementById('generate-batch').addEventListener('click', () => this.generateBatch());
+        try {
+            const generateSingleBtn = document.getElementById('generate-single');
+            const generateBatchBtn = document.getElementById('generate-batch');
+            
+            console.log('🔍 Generation buttons found:', {
+                generateSingle: !!generateSingleBtn,
+                generateBatch: !!generateBatchBtn
+            });
+            
+            if (generateSingleBtn) {
+                generateSingleBtn.addEventListener('click', () => this.generateSingle());
+                console.log('✅ Generate single button event attached');
+            } else {
+                console.error('❌ Generate single button not found');
+            }
+            
+            if (generateBatchBtn) {
+                generateBatchBtn.addEventListener('click', () => this.generateBatch());
+                console.log('✅ Generate batch button event attached');
+            } else {
+                console.error('❌ Generate batch button not found');
+            }
+        } catch (error) {
+            console.error('❌ Error binding generation buttons:', error);
+        }
         
         // Batch controls
-        document.getElementById('stop-batch').addEventListener('click', () => this.stopBatch());
+        try {
+            const stopBatchBtn = document.getElementById('stop-batch');
+            if (stopBatchBtn) {
+                stopBatchBtn.addEventListener('click', () => this.stopBatch());
+                console.log('✅ Stop batch button event attached');
+            } else {
+                console.error('❌ Stop batch button not found');
+            }
+        } catch (error) {
+            console.error('❌ Error binding batch controls:', error);
+        }
         
         // Results section
-        document.getElementById('export-all').addEventListener('click', () => this.exportAll());
-        document.getElementById('clear-results').addEventListener('click', () => this.clearResults());
+        try {
+            const exportAllBtn = document.getElementById('export-all');
+            const clearResultsBtn = document.getElementById('clear-results');
+            
+            console.log('🔍 Results buttons found:', {
+                exportAll: !!exportAllBtn,
+                clearResults: !!clearResultsBtn
+            });
+            
+            if (exportAllBtn) {
+                exportAllBtn.addEventListener('click', () => this.exportAll());
+                console.log('✅ Export all button event attached');
+            } else {
+                console.error('❌ Export all button not found');
+            }
+            
+            if (clearResultsBtn) {
+                clearResultsBtn.addEventListener('click', () => this.clearResults());
+                console.log('✅ Clear results button event attached');
+            } else {
+                console.error('❌ Clear results button not found');
+            }
+        } catch (error) {
+            console.error('❌ Error binding results buttons:', error);
+        }
         
         // Modal close
-        document.getElementById('modal-close').addEventListener('click', () => this.closeModal());
-        document.getElementById('modal-overlay').addEventListener('click', (e) => {
-            if (e.target === document.getElementById('modal-overlay')) {
-                this.closeModal();
+        try {
+            const modalCloseBtn = document.getElementById('modal-close');
+            const modalOverlay = document.getElementById('modal-overlay');
+            
+            console.log('🔍 Modal elements found:', {
+                modalClose: !!modalCloseBtn,
+                modalOverlay: !!modalOverlay
+            });
+            
+            if (modalCloseBtn) {
+                modalCloseBtn.addEventListener('click', () => this.closeModal());
+                console.log('✅ Modal close button event attached');
+            } else {
+                console.error('❌ Modal close button not found');
             }
-        });
+            
+            if (modalOverlay) {
+                modalOverlay.addEventListener('click', (e) => {
+                    if (e.target === modalOverlay) {
+                        this.closeModal();
+                    }
+                });
+                console.log('✅ Modal overlay event attached');
+            } else {
+                console.error('❌ Modal overlay not found');
+            }
+        } catch (error) {
+            console.error('❌ Error binding modal events:', error);
+        }
         
         // Navigation
-        document.querySelectorAll('.nav__item').forEach(item => {
-            item.addEventListener('click', (e) => {
-                const section = e.target.dataset.section;
-                if (section) {
-                    this.switchSection(section);
-                }
+        try {
+            const navItems = document.querySelectorAll('.nav__item');
+            console.log('🔍 Navigation items found:', navItems.length);
+            
+            navItems.forEach(item => {
+                item.addEventListener('click', (e) => {
+                    const section = e.target.dataset.section;
+                    if (section) {
+                        this.switchSection(section);
+                    }
+                });
             });
-        });
+            
+            if (navItems.length > 0) {
+                console.log('✅ Navigation events attached');
+            } else {
+                console.error('❌ No navigation items found');
+            }
+        } catch (error) {
+            console.error('❌ Error binding navigation:', error);
+        }
         
         // URL input validation
-        document.getElementById('fiverr-url').addEventListener('input', (e) => {
-            const url = e.target.value;
-            if (url) {
-                this.validateURL(url);
+        try {
+            const fiverrUrlInput = document.getElementById('fiverr-url');
+            const fiverrUrlsInput = document.getElementById('fiverr-urls');
+            
+            console.log('🔍 URL inputs found:', {
+                fiverrUrl: !!fiverrUrlInput,
+                fiverrUrls: !!fiverrUrlsInput
+            });
+            
+            if (fiverrUrlInput) {
+                fiverrUrlInput.addEventListener('input', (e) => {
+                    const url = e.target.value;
+                    if (url) {
+                        this.validateURL(url);
+                    } else {
+                        this.clearURLPreview('single');
+                    }
+                });
+                console.log('✅ Single URL input event attached');
             } else {
-                this.clearURLPreview('single');
+                console.error('❌ Single URL input not found');
             }
-        });
-        
-        document.getElementById('fiverr-urls').addEventListener('input', (e) => {
-            const urls = e.target.value;
-            if (urls) {
-                this.validateURLs(urls);
+            
+            if (fiverrUrlsInput) {
+                fiverrUrlsInput.addEventListener('input', (e) => {
+                    const urls = e.target.value;
+                    if (urls) {
+                        this.validateURLs(urls);
+                    } else {
+                        this.clearURLPreview('batch');
+                    }
+                });
+                console.log('✅ Batch URLs input event attached');
             } else {
-                this.clearURLPreview('batch');
+                console.error('❌ Batch URLs input not found');
             }
-        });
+        } catch (error) {
+            console.error('❌ Error binding URL inputs:', error);
+        }
         
         // Event delegation for copy buttons and other dynamic elements
-        document.addEventListener('click', (e) => {
-            // Copy buttons
-            if (e.target.matches('.copy-btn') || e.target.matches('.result-card__hashtag')) {
-                e.preventDefault();
-                this.handleCopyClick(e.target);
-            }
-            
-            // Export buttons
-            if (e.target.matches('[data-export-index]')) {
-                const index = parseInt(e.target.dataset.exportIndex);
-                this.exportResult(index);
-            }
-            
-            // Modal buttons
-            if (e.target.matches('[data-modal-title]')) {
-                const title = e.target.dataset.modalTitle;
-                const content = e.target.dataset.modalContent;
-                this.openModal(title, content);
-            }
-        });
+        try {
+            document.addEventListener('click', (e) => {
+                // Copy buttons
+                if (e.target.matches('.copy-btn') || e.target.matches('.result-card__hashtag')) {
+                    e.preventDefault();
+                    this.handleCopyClick(e.target);
+                }
+                
+                // Export buttons
+                if (e.target.matches('[data-export-index]')) {
+                    const index = parseInt(e.target.dataset.exportIndex);
+                    this.exportResult(index);
+                }
+                
+                // Modal buttons
+                if (e.target.matches('[data-modal-title]')) {
+                    const title = e.target.dataset.modalTitle;
+                    const content = e.target.dataset.modalContent;
+                    this.openModal(title, content);
+                }
+            });
+            console.log('✅ Event delegation attached');
+        } catch (error) {
+            console.error('❌ Error binding event delegation:', error);
+        }
         
         // Keyboard shortcuts
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') {
-                this.closeModal();
-            }
-        });
+        try {
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') {
+                    this.closeModal();
+                }
+            });
+            console.log('✅ Keyboard shortcuts attached');
+        } catch (error) {
+            console.error('❌ Error binding keyboard shortcuts:', error);
+        }
+        
+        console.log('🎉 All event listeners bound successfully!');
     }
     
     handleCopyClick(element) {
