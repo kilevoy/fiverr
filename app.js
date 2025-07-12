@@ -1531,9 +1531,28 @@ class FiverrPinterestGenerator {
                 });
                 
                 if (!response.ok) {
-                    const errorData = await response.json();
+                    const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
                     console.error('❌ Netlify function error:', errorData);
-                    throw new Error(`Netlify function error: ${errorData.error || response.statusText}`);
+                    
+                    let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+                    
+                    if (response.status === 408) {
+                        errorMessage = 'Тайм-аут запроса к Claude API. Попробуйте еще раз.';
+                    } else if (response.status === 400) {
+                        errorMessage = 'Ошибка запроса: ' + (errorData.error || 'Неверные данные');
+                    } else if (response.status === 401) {
+                        errorMessage = 'Неверный API ключ Claude';
+                    } else if (response.status === 403) {
+                        errorMessage = 'Доступ запрещен - проверьте план подписки Claude';
+                    } else if (response.status === 429) {
+                        errorMessage = 'Превышен лимит запросов Claude API';
+                    } else if (response.status === 503) {
+                        errorMessage = 'Сервис Claude API недоступен';
+                    } else if (errorData.error) {
+                        errorMessage = errorData.error;
+                    }
+                    
+                    throw new Error(errorMessage);
                 }
                 
                 const data = await response.json();
@@ -1578,7 +1597,18 @@ class FiverrPinterestGenerator {
                 
             } catch (error) {
                 console.error('❌ Netlify function failed:', error);
-                console.log('🔄 Falling back to CORS proxy methods...');
+                
+                // Более детальная обработка ошибок Netlify функции
+                if (error.name === 'AbortError') {
+                    console.log('🔄 Netlify function timeout, falling back to CORS proxy methods...');
+                } else if (error.message.includes('Failed to fetch')) {
+                    console.log('🔄 Netlify function not reachable, falling back to CORS proxy methods...');
+                } else if (error.message.includes('404')) {
+                    console.log('🔄 Netlify function not found, falling back to CORS proxy methods...');
+                } else {
+                    console.log('🔄 Netlify function error, falling back to CORS proxy methods...');
+                }
+                
                 // Fall through to CORS proxy methods
             }
         }

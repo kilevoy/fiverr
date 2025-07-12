@@ -1,3 +1,5 @@
+const fetch = require('node-fetch');
+
 exports.handler = async (event, context) => {
   // Разрешаем CORS для всех источников
   const headers = {
@@ -24,6 +26,17 @@ exports.handler = async (event, context) => {
   }
 
   try {
+    console.log('🌐 Netlify function called');
+    
+    // Проверяем тело запроса
+    if (!event.body) {
+      return {
+        statusCode: 400,
+        headers,
+        body: JSON.stringify({ error: 'Request body is required' })
+      };
+    }
+
     const requestBody = JSON.parse(event.body);
     const { apiKey, messages } = requestBody;
 
@@ -35,7 +48,20 @@ exports.handler = async (event, context) => {
       };
     }
 
-    // Запрос к Claude API
+    if (!messages || !Array.isArray(messages)) {
+      return {
+        statusCode: 400,
+        headers,
+        body: JSON.stringify({ error: 'Messages array is required' })
+      };
+    }
+
+    console.log('📤 Making request to Claude API...');
+
+    // Запрос к Claude API с таймаутом
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 25000); // 25 секунд
+
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -47,21 +73,39 @@ exports.handler = async (event, context) => {
         model: 'claude-3-5-sonnet-20241022',
         max_tokens: 4000,
         messages: messages
-      })
+      }),
+      signal: controller.signal
     });
 
-    const data = await response.json();
+    clearTimeout(timeoutId);
+
+    console.log('📡 Claude API response status:', response.status);
 
     if (!response.ok) {
+      const errorText = await response.text();
+      console.error('❌ Claude API error:', response.status, errorText);
+      
+      let errorMessage = 'API request failed';
+      try {
+        const errorData = JSON.parse(errorText);
+        errorMessage = errorData.error?.message || errorMessage;
+      } catch (e) {
+        // Ignore parse error
+      }
+      
       return {
         statusCode: response.status,
         headers,
         body: JSON.stringify({ 
           error: 'Claude API error', 
-          details: data 
+          message: errorMessage,
+          status: response.status
         })
       };
     }
+
+    const data = await response.json();
+    console.log('✅ Claude API success');
 
     return {
       statusCode: 200,
@@ -70,13 +114,28 @@ exports.handler = async (event, context) => {
     };
 
   } catch (error) {
-    console.error('Function error:', error);
+    console.error('💥 Function error:', error);
+    
+    let errorMessage = 'Internal server error';
+    let statusCode = 500;
+    
+    if (error.name === 'AbortError') {
+      errorMessage = 'Request timeout';
+      statusCode = 408;
+    } else if (error.code === 'ENOTFOUND') {
+      errorMessage = 'Network error - cannot reach Claude API';
+      statusCode = 503;
+    } else if (error.message.includes('JSON')) {
+      errorMessage = 'Invalid request format';
+      statusCode = 400;
+    }
+    
     return {
-      statusCode: 500,
+      statusCode: statusCode,
       headers,
       body: JSON.stringify({ 
-        error: 'Internal server error', 
-        details: error.message 
+        error: errorMessage, 
+        details: error.message
       })
     };
   }
